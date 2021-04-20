@@ -1,3 +1,5 @@
+import itertools
+
 """
 Forcekits (new in polychrom)
 ----------------------------
@@ -30,7 +32,7 @@ def polymer_chains(
     angle_force_kwargs={"k": 0.05},
     nonbonded_force_func=forces.polynomial_repulsive,
     nonbonded_force_kwargs={"trunc": 3.0, "radiusMult": 1.0},
-    except_bonds=True,
+    exclude_neighbors=1,
     extra_bonds=None,
     extra_triplets=None,
     override_checks=False,
@@ -46,9 +48,9 @@ def polymer_chains(
         and the last particles of the chain are linked into a ring.
         The default value links all particles of the system into one chain.
 
-    except_bonds : bool
-        If True then do not calculate non-bonded forces between the
-        particles connected by a bond. True by default.
+    exclude_neighbors : int
+        Do not calculate non-bonded forces between the specified number of neighboring (connected by bonds) particles.
+        Default is 1 (i.e. do not calculate non-bonded forces between particles directly connected by a bond).
         
     extra_bonds : None or list
         [(i,j)] list of extra bonds. Same for extra_triplets. 
@@ -109,25 +111,39 @@ def polymer_chains(
     if nonbonded_force_func is not None:
         nb_force = nonbonded_force_func(sim_object, **nonbonded_force_kwargs)
 
-        if except_bonds:
-            exc = list(set([tuple(i) for i in np.sort(np.array(bonds), axis=1)]))
-            if hasattr(nb_force, "addException"):
-                print(
-                    "Exclude neighbouring chain particles from {}".format(nb_force.name)
-                )
-                for pair in exc:
+        if exclude_neighbors > 0:
+            number_exceptions = 0
+            for pair in _neighbor_bonds(bonds, exclude_neighbors):
+                if hasattr(nb_force, "addException"):
+                    #print("Exclude neighbouring chain particles from {}".format(nb_force.name))
                     nb_force.addException(int(pair[0]), int(pair[1]), 0, 0, 0, True)
 
-            # The built-in LJ nonbonded force uses "exclusions" instead of "exceptions"
-            elif hasattr(nb_force, "addExclusion"):
-                print(
-                    "Exclude neighbouring chain particles from {}".format(nb_force.name)
-                )
-                for pair in exc:
+                # The built-in LJ nonbonded force uses "exclusions" instead of "exceptions"
+                elif hasattr(nb_force, "addExclusion"):
+                    #print("Exclude neighbouring chain particles from {}".format(nb_force.name))
                     nb_force.addExclusion(int(pair[0]), int(pair[1]))
 
-            print("Number of exceptions:", len(bonds))
+                number_exceptions += 1
+
+            print("Number of exceptions:", number_exceptions)
 
         force_list.append(nb_force)
 
     return force_list
+
+
+def _neighbor_bonds(bond_list, n):
+    """
+    Generator which yields unique pairs of particles connected by n bonds.
+    """
+
+    # initialize first window of neighboring particles
+    yield from [p for p in itertools.permutations(set(itertools.chain(*bond_list[:n])), 2) if p <= p[::-1]]
+
+    for i in range(len(bond_list) - n):
+        new_bond = bond_list[i + n]
+        if bond_list[i + n - 1][1] == new_bond[1]:
+            # this bond connects ends of a ring
+            new_bond = new_bond[::-1]
+
+        yield from [(p, new_bond[1]) for p in set(itertools.chain(*bond_list[i + 1 : i + n]))]
