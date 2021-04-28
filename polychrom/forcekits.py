@@ -32,10 +32,11 @@ def polymer_chains(
     angle_force_kwargs={"k": 0.05},
     nonbonded_force_func=forces.polynomial_repulsive,
     nonbonded_force_kwargs={"trunc": 3.0, "radiusMult": 1.0},
-    exclude_neighbors=0,
+    except_bonds=1,
+    old_except_bonds=True,
     extra_bonds=None,
     extra_triplets=None,
-    override_checks=False,
+    override_checks=False
 ):
     """Adds harmonic bonds connecting polymer chains
 
@@ -48,7 +49,7 @@ def polymer_chains(
         and the last particles of the chain are linked into a ring.
         The default value links all particles of the system into one chain.
 
-    exclude_neighbors : int
+    except_bonds : int
         Do not calculate non-bonded forces between the specified number of neighboring (connected by bonds) particles.
         Default is 1 (i.e. do not calculate non-bonded forces between particles directly connected by a bond).
         
@@ -111,9 +112,23 @@ def polymer_chains(
     if nonbonded_force_func is not None:
         nb_force = nonbonded_force_func(sim_object, **nonbonded_force_kwargs)
 
-        if exclude_neighbors > 0:
+        if old_except_bonds:
+            exc = list(set([tuple(i) for i in np.sort(np.array(bonds), axis=1)]))
+            if hasattr(nb_force, "addException"):
+                print(
+                    "Exclude neighbouring chain particles from {}".format(nb_force.name)
+                )
+                for pair in exc:
+                    nb_force.addException(int(pair[0]), int(pair[1]), 0, 0, 0, True)
+            elif hasattr(nb_force, "addExclusion"):
+                 print(
+                     "Exclude neighbouring chain particles from {}".format(nb_force.name)
+                 )
+                 for pair in exc:
+                     nb_force.addExclusion(int(pair[0]), int(pair[1]))
+        elif except_bonds > 0:
             number_exceptions = 0
-            for pair in _neighbor_bonds(bonds, exclude_neighbors):
+            for pair in _neighbor_bonds(bonds, except_bonds):
                 if hasattr(nb_force, "addException"):
                     # TODO: keep logging every exception?
                     #print("Exclude neighbouring chain particles from {}".format(nb_force.name))
