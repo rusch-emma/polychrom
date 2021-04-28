@@ -32,7 +32,7 @@ def polymer_chains(
     angle_force_kwargs={"k": 0.05},
     nonbonded_force_func=forces.polynomial_repulsive,
     nonbonded_force_kwargs={"trunc": 3.0, "radiusMult": 1.0},
-    exclude_neighbors=1,
+    exclude_neighbors=0,
     extra_bonds=None,
     extra_triplets=None,
     override_checks=False,
@@ -115,12 +115,15 @@ def polymer_chains(
             number_exceptions = 0
             for pair in _neighbor_bonds(bonds, exclude_neighbors):
                 if hasattr(nb_force, "addException"):
+                    # TODO: keep logging every exception?
                     #print("Exclude neighbouring chain particles from {}".format(nb_force.name))
+                    #print(f"Exclude chain particles {pair} from {nb_force.name}")
                     nb_force.addException(int(pair[0]), int(pair[1]), 0, 0, 0, True)
 
                 # The built-in LJ nonbonded force uses "exclusions" instead of "exceptions"
                 elif hasattr(nb_force, "addExclusion"):
                     #print("Exclude neighbouring chain particles from {}".format(nb_force.name))
+                    #print(f"Exclude chain particles {pair} from {nb_force.name}")
                     nb_force.addExclusion(int(pair[0]), int(pair[1]))
 
                 number_exceptions += 1
@@ -137,6 +140,9 @@ def _neighbor_bonds(bond_list, n):
     Generator which yields unique pairs of particles connected by n bonds.
     """
 
+    if n < 1:
+        return
+
     # initialize first window of neighboring particles
     yield from [p for p in itertools.permutations(set(itertools.chain(*bond_list[:n])), 2) if p <= p[::-1]]
 
@@ -146,4 +152,7 @@ def _neighbor_bonds(bond_list, n):
             # this bond connects ends of a ring
             new_bond = new_bond[::-1]
 
-        yield from [(p, new_bond[1]) for p in set(itertools.chain(*bond_list[i + 1 : i + n]))]
+        if n == 1:
+            yield new_bond
+        else:
+            yield from [(p, new_bond[1]) for p in set(itertools.chain(*bond_list[i + 1 : i + n]))]
