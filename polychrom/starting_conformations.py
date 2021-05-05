@@ -121,7 +121,9 @@ def create_random_walk(step_size, N):
 def create_constrained_random_walk(N, 
     constraint_f, 
     starting_point = (0, 0, 0),
-    step_size=1.0
+    step_size=1.0,
+    max_step_attempts=0,
+    max_retries=0
     ):
     """
     Creates a constrained freely joined chain of length N with step step_size.
@@ -139,17 +141,38 @@ def create_constrained_random_walk(N,
         and return True if the new position is accepted and False is it is forbidden.
     starting_point : a tuple of (float, float, float)
         The starting point of a random walk.
-    step_size: float
+    step_size : float
         The size of a step of the random walk.
+    max_step_attempts : int
+        The number of attempts to make a step before the random walk will be reset and started from scratch. Must be at least N.
+        Default is 0, i.e. no limit.
+    max_retries : int
+        The number of times the random walk is reset and started from scratch when exceeding max_step_attempts.
+        Default is 0, i.e. no limit.
+    """
+    if max_step_attempts > 0 and max_step_attempts < N:
+        raise ValueError("max_step_attempts needs to be greater than or equal to N")
 
-    """    
-    
+    attempts = 0
+    retries = 0
     i = 1
     j = N
     out = np.full((N, 3), np.nan)
     out[0] = starting_point
     
     while i < N:
+        if max_retries > 0 and retries > max_retries:
+            raise ValueError("max_retries exceeded")
+    
+        if max_step_attempts > 0 and attempts > max_step_attempts:
+            # reset random walk, retry
+            out = np.full((N, 3), np.nan)
+            out[0] = starting_point
+            i = 1
+            j = N
+            attempts = 0
+            retries += 1
+
         if j == N:
             theta, u = _random_points_sphere(N).T        
             dx = step_size * np.sqrt(1.0 - u * u) * np.cos(theta)
@@ -165,6 +188,7 @@ def create_constrained_random_walk(N,
             i += 1
         
         j += 1
+        attempts += 1
         
     return out
 
